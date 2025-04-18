@@ -20,7 +20,6 @@ const App = () => {
   const [imageClose, setImageClose] = useState(false);
   const [showListeningFeedback, setShowListeningFeedback] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [audioSrc, setAudioSrc] = useState(""); // For direct audio playback
   const avatarRef = useRef();
   const loadingRef = useRef();
   const headRef = useRef(null);
@@ -38,7 +37,7 @@ const App = () => {
       question: "Johar! Mujhe ek sawaal poochhna hai.",
       answer:
         "Johar Bhaiya! Johar Didi! Main hoon Swasthya Bir – aapka swasthya saathi. Kya main aapki madad kar sakta hoon? Kuch poochhna hai swasthya ke baare mein?",
-          },
+    },
     {
       question: "5 saal ke bachhe ko bukhaar hai, kya karein?",
       answer:
@@ -58,7 +57,7 @@ const App = () => {
       question: "Bahut dhanyawaad, Swasthya Bir!",
       answer:
         "Aapka swasth rehna hi mera lakshya hai. Zarurat padne par phir se bula lijiye. Johar!",
-          },
+    },
   ];
 
   // Reset image close state when changing image content
@@ -98,57 +97,9 @@ const App = () => {
     }
   }, [finalTranscript, resetTranscript]);
 
-  // Custom TTS fetch wrapper with direct audio test
-  const ttsFetchWrapper = async (text, lang, voice) => {
-    try {
-      const body = {
-        text: text,
-        language_code: lang || "hi-IN",
-        voice_name: voice || "hi-IN-Standard-A",
-        speaking_rate: 1,
-        pitch: 0,
-      };
-
-      console.log("📤 Sending TTS request:", text);
-
-      const response = await fetch("http://localhost:8000/tts/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("❌ TTS request failed:", errorText);
-        throw new Error(`TTS fetch failed: ${response.status} ${errorText}`);
-      }
-
-      const json = await response.json();
-      console.log("✅ TTS response received with audio URL:", json.audio_url);
-      
-      // Save audio URL for direct playback
-      if (json.audio_url) {
-        setAudioSrc(json.audio_url);
-        
-        // DIRECT TEST: Play the audio directly to verify it works
-        console.log("Attempting to play audio directly");
-        const audio = new Audio(json.audio_url);
-        audio.play().catch(e => console.error("Error playing audio:", e));
-      }
-
-      return json;
-    } catch (error) {
-      console.error("TTS API error:", error);
-      throw error;
-    }
-  };
-
   const processTranscript = async (transcript) => {
     setLink('');
     setImageContent('');
-    setAudioSrc(''); // Reset audio source
     
     const trimmedTranscript = transcript.trim().toLowerCase();
     console.log("Transcript:", trimmedTranscript);
@@ -169,45 +120,16 @@ const App = () => {
       const extractedLink = extractLink(matchingConversation.answer);
       setLink(extractedLink);
 
-      // Try multiple approaches to make the talking head speak
+      // Make the talking head speak using the built-in TTS
       if (headRef.current) {
         try {
-          console.log("Attempting to make talking head speak:", matchingConversation.answer);
-          
-          // First try the built-in method
+          console.log("Making talking head speak:", matchingConversation.answer);
           await headRef.current.speakText(matchingConversation.answer);
-          
-          // If the above doesn't work, try manual TTS request
-          const ttsResponse = await ttsFetchWrapper(
-            matchingConversation.answer, 
-            "hi-IN", 
-            "hi-IN-Standard-A"
-          );
-          
-          // Try to manually apply the audio to the talking head if there's such a method
-          if (headRef.current.speakAudio && ttsResponse.audio_url) {
-            console.log("Trying to speak with direct audio URL");
-            await headRef.current.speakAudio(ttsResponse.audio_url);
-          }
         } catch (error) {
-          console.error("Error in speech process:", error);
-          
-          // Fallback: just use the TTS API directly
-          await ttsFetchWrapper(
-            matchingConversation.answer, 
-            "hi-IN", 
-            "hi-IN-Standard-A"
-          );
+          console.error("Error making talking head speak:", error);
         }
       } else {
         console.error("headRef.current is not available!");
-        
-        // Fallback if no talking head reference
-        await ttsFetchWrapper(
-          matchingConversation.answer, 
-          "hi-IN", 
-          "hi-IN-Standard-A"
-        );
       }
     } else {
       console.log(
@@ -216,7 +138,7 @@ const App = () => {
       );
 
       // Default message when no match is found
-      const defaultMessage = "मुझे आपकी बात समझ में नहीं आई। कृपया फिर से कहें।";
+      const defaultMessage = "Bhaiya ghar jao";
       setResponseText(defaultMessage);
 
       // Try to speak the default message
@@ -225,10 +147,7 @@ const App = () => {
           await headRef.current.speakText(defaultMessage);
         } catch (error) {
           console.error("Error speaking default message:", error);
-          await ttsFetchWrapper(defaultMessage, "hi-IN", "hi-IN-Standard-A");
         }
-      } else {
-        await ttsFetchWrapper(defaultMessage, "hi-IN", "hi-IN-Standard-A");
       }
     }
   };
@@ -255,31 +174,19 @@ const App = () => {
       console.log("Creating Talking Head instance");
       
       try {
-        // Custom TTS fetch wrapper
-        const ttsProxyEndpoint = "http://localhost:8000/tts/generate";
-
-        // Patch TalkingHead instance
+        // Create TalkingHead instance with Google TTS API
+        const API_KEY_TTS =  import.meta.env.VITE_TTS_API;; // Replace with your actual API key
+        
         headRef.current = new TalkingHead(nodeAvatar, {
           cameraView: "upper",
-          ttsEndpoint: ttsProxyEndpoint,
-          ttsRequestBody: (text, lang, voice) => {
-            return {
-              text: text,
-              language_code: lang || "hi-IN",
-              voice_name: voice || "hi-IN-Standard-A",
-              speaking_rate: 1,
-              pitch: 0,
-            };
+          ttsEndpoint: `https://eu-texttospeech.googleapis.com/v1beta1/text:synthesize`,
+          ttsApikey: API_KEY_TTS,
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.5,
           },
-          headers: {
-            "Content-Type": "application/json",
-          },
-          fetch: async (url, options, text, lang, voice) => {
-            // Intercept fetch with wrapper
-            const response = await ttsFetchWrapper(text, lang, voice);
-            console.log("Returning processed TTS response:", response);
-            return response;
-          },
+          cameraRotateEnable: false,
+          avatarMood: "neutral"
         });
 
         const nodeLoading = loadingRef.current;
@@ -287,14 +194,16 @@ const App = () => {
           nodeLoading.textContent = "लोड हो रहा है...";
         }
 
+        // Set voiceId based on Hindi language
+        const voiceId = "en-US-Standard-A"; // Hindi voice
+
         await headRef.current.showAvatar(
           {
             url: "/assets/model.glb",
             body: "M",
-            avatarMood: "neutral",
-            ttsLang: "en-GB", // Set to Hindi
-            ttsVoice: "en-GB-Standard-A", // Hindi voice
-            lipsyncLang: "en", // Hindi lip sync
+            ttsLang: "en-US",
+            ttsVoice: voiceId,
+            lipsyncLang: "en", // Using English for lip sync as Hindi might not be fully supported
           },
           (ev) => {
             if (ev.lengthComputable && nodeLoading) {
@@ -314,11 +223,7 @@ const App = () => {
           if (headRef.current) {
             headRef.current.speakText("नमस्ते, मैं स्वास्थ्य बीर हूँ।")
               .then(() => console.log("Test speech completed"))
-              .catch(err => {
-                console.error("Test speech failed:", err);
-                // Fallback to direct TTS
-                return ttsFetchWrapper("नमस्ते, मैं स्वास्थ्य बीर हूँ।", "hi-IN", "hi-IN-Standard-A");
-              });
+              .catch(err => console.error("Test speech failed:", err));
           } else {
             console.error("headRef.current is not available for test speak");
           }
@@ -520,23 +425,6 @@ const App = () => {
           </button>
         </span>
       )}
-
-      {/* Direct audio player as fallback */}
-      {/* {audioSrc && (
-        <audio 
-          autoPlay 
-          src={audioSrc} 
-          controls
-          style={{ 
-            position: "fixed", 
-            bottom: "10px", 
-            right: "10px", 
-            zIndex: 9999,
-            maxWidth: "300px" 
-          }} 
-          onError={(e) => console.error("Audio error:", e)}
-        />
-      )} */}
     </div>
   );
 };
