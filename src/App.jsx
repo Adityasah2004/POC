@@ -3,8 +3,8 @@ import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 import { TalkingHead } from "./modules/talkinghead.mjs";
-import { findBestMatch } from "string-similarity"; // Adjust the path as necessary
-import bg from "./assets/bgVideo.mp4";
+import { findBestMatch } from "string-similarity";
+import bg from "./assets/022.jpg";
 
 const App = () => {
   const {
@@ -18,9 +18,9 @@ const App = () => {
   const [link, setLink] = useState("");
   const [imageContent, setImageContent] = useState("");
   const [imageClose, setImageClose] = useState(false);
-  // const [videoClose, setVideoClose] = useState(false);
   const [showListeningFeedback, setShowListeningFeedback] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [audioSrc, setAudioSrc] = useState(""); // For direct audio playback
   const avatarRef = useRef();
   const loadingRef = useRef();
   const headRef = useRef(null);
@@ -28,7 +28,6 @@ const App = () => {
   // Define extractLink function
   const extractLink = (text) => {
     // Implement logic to extract link from text
-    // Example implementation:
     const regex = /(https?:\/\/[^\s]+)/g;
     const match = text.match(regex);
     return match ? match[0] : null;
@@ -36,42 +35,38 @@ const App = () => {
 
   const conversations = [
     {
-      question: "Hello, I need help with my recent order.",
+      question: "Johar! Mujhe ek sawaal poochhna hai.",
       answer:
-        "Good day! I'm here to assist you. Could you please provide me with your order number so I can locate your details?",
-      image:
-        "https://gleen.ai/blog/content/images/2024/01/Screenshot-2024-01-03-at-6.19.43-PM.png",
+        "Johar Bhaiya! Johar Didi! Main hoon Swasthya Bir – aapka swasthya saathi. Kya main aapki madad kar sakta hoon? Kuch poochhna hai swasthya ke baare mein?",
+          },
+    {
+      question: "5 saal ke bachhe ko bukhaar hai, kya karein?",
+      answer:
+        "Thik hai, chinta mat kijiye. Bachhe ko bukhaar ho toh sabse pehle:\n\n- Paani pilaiye, har ek ghante mein thoda-thoda.\n- Kapde geele karke maathe aur badan pe sekein.\n- Zyada kapde na pehnaayein, halka kapda theek hai.\n\nAgar 102 se zyada bukhaar ho ya 2 din tak na utare, aaspaas ke doctor ya Asha didi se milna zaroori hai.",
     },
     {
-      question: "Sure, it's 12345.",
+      question: "Haan, doctor ka number chahiye.",
       answer:
-        "Thank you. I see your order for the deluxe model vacuum cleaner placed yesterday. How can I assist you with this order today?",
+        "Thik hai. Aapke gaon mein Mahuwa Swasthya Kendra uplabdh hai.\nDoctor se milne ke liye call kijiye: 9002337788\nYa direct jaa sakte hain – subah 9 se shaam 4 baje tak khula rahega.",
     },
     {
-      question:
-        "Actually, I received the wrong color. I ordered black, but I received blue.",
+      question: "Aur kya karna chahiye taaki dubara bukhaar na ho?",
       answer:
-        "I apologize for the inconvenience. Let me initiate a return and replacement process for you. Could you confirm if you prefer to receive the correct black model?",
+        "Aapka dhyan rakhiye:\n- Din mein 3 baar paani piyiye\n- Saaf safai banaye rakhiye\n- Bacche ko swachh aur poshtik bhojan dijiye\n\nPhir milenge, Johar!",
     },
     {
-      question: "Yes, please. That would be great.",
+      question: "Bahut dhanyawaad, Swasthya Bir!",
       answer:
-        "I've processed the return label for the blue vacuum cleaner. You should receive an email shortly with the return instructions. The replacement in black will be shipped out within 24 hours. Is there anything else I can assist you with?",
-      image:
-        "https://media.licdn.com/dms/image/D4D12AQFqiy4k-hCAdQ/article-cover_image-shrink_720_1280/0/1676325587382?e=2147483647&v=beta&t=Sc0HZZXDQvVYN0Jru0Gr_HVhWg7pC5fVEr0QJwOXsAI",
-    },
-    {
-      question: "No, that's all for now. Thank you for your help.",
-      answer:
-        "You're welcome. If you have any more questions in the future, feel free to reach out. Have a wonderful day!",
-    },
-    {
-      question: "Thanks, you too!",
-      answer: "Take care!",
-      image:
-        "https://cdn.prod.website-files.com/634e928d7acf0e5b9297c41b/639b3b8fade13f1769e46ef5_customer%20service%20chatbot.webp",
-    },
+        "Aapka swasth rehna hi mera lakshya hai. Zarurat padne par phir se bula lijiye. Johar!",
+          },
   ];
+
+  // Reset image close state when changing image content
+  useEffect(() => {
+    if (imageContent) {
+      setImageClose(false);
+    }
+  }, [imageContent]);
 
   useEffect(() => {
     if (showListeningFeedback) {
@@ -85,7 +80,6 @@ const App = () => {
   const handleStart = () => {
     SpeechRecognition.startListening({ continuous: false });
     setIsListening(true);
-
     setShowListeningFeedback(true);
     console.log("Listening started");
   };
@@ -104,12 +98,59 @@ const App = () => {
     }
   }, [finalTranscript, resetTranscript]);
 
+  // Custom TTS fetch wrapper with direct audio test
+  const ttsFetchWrapper = async (text, lang, voice) => {
+    try {
+      const body = {
+        text: text,
+        language_code: lang || "hi-IN",
+        voice_name: voice || "hi-IN-Standard-A",
+        speaking_rate: 1,
+        pitch: 0,
+      };
+
+      console.log("📤 Sending TTS request:", text);
+
+      const response = await fetch("http://localhost:8000/tts/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ TTS request failed:", errorText);
+        throw new Error(`TTS fetch failed: ${response.status} ${errorText}`);
+      }
+
+      const json = await response.json();
+      console.log("✅ TTS response received with audio URL:", json.audio_url);
+      
+      // Save audio URL for direct playback
+      if (json.audio_url) {
+        setAudioSrc(json.audio_url);
+        
+        // DIRECT TEST: Play the audio directly to verify it works
+        console.log("Attempting to play audio directly");
+        const audio = new Audio(json.audio_url);
+        audio.play().catch(e => console.error("Error playing audio:", e));
+      }
+
+      return json;
+    } catch (error) {
+      console.error("TTS API error:", error);
+      throw error;
+    }
+  };
+
   const processTranscript = async (transcript) => {
     setLink('');
-    setImageContent('')
-    // setImageClose(true)
+    setImageContent('');
+    setAudioSrc(''); // Reset audio source
+    
     const trimmedTranscript = transcript.trim().toLowerCase();
-
     console.log("Transcript:", trimmedTranscript);
 
     const matches = findBestMatch(
@@ -120,7 +161,6 @@ const App = () => {
     if (matches.bestMatch.rating >= 0.5) {
       const bestMatchIndex = matches.bestMatchIndex;
       const matchingConversation = conversations[bestMatchIndex];
-      console.log(matchingConversation);
       console.log("Best match:", matchingConversation.question);
 
       setImageContent(matchingConversation.image || "");
@@ -129,8 +169,45 @@ const App = () => {
       const extractedLink = extractLink(matchingConversation.answer);
       setLink(extractedLink);
 
+      // Try multiple approaches to make the talking head speak
       if (headRef.current) {
-        headRef.current.speakText(matchingConversation.answer);
+        try {
+          console.log("Attempting to make talking head speak:", matchingConversation.answer);
+          
+          // First try the built-in method
+          await headRef.current.speakText(matchingConversation.answer);
+          
+          // If the above doesn't work, try manual TTS request
+          const ttsResponse = await ttsFetchWrapper(
+            matchingConversation.answer, 
+            "hi-IN", 
+            "hi-IN-Standard-A"
+          );
+          
+          // Try to manually apply the audio to the talking head if there's such a method
+          if (headRef.current.speakAudio && ttsResponse.audio_url) {
+            console.log("Trying to speak with direct audio URL");
+            await headRef.current.speakAudio(ttsResponse.audio_url);
+          }
+        } catch (error) {
+          console.error("Error in speech process:", error);
+          
+          // Fallback: just use the TTS API directly
+          await ttsFetchWrapper(
+            matchingConversation.answer, 
+            "hi-IN", 
+            "hi-IN-Standard-A"
+          );
+        }
+      } else {
+        console.error("headRef.current is not available!");
+        
+        // Fallback if no talking head reference
+        await ttsFetchWrapper(
+          matchingConversation.answer, 
+          "hi-IN", 
+          "hi-IN-Standard-A"
+        );
       }
     } else {
       console.log(
@@ -138,64 +215,119 @@ const App = () => {
         trimmedTranscript
       );
 
-      // Speak the message when no match is found
-      if (headRef.current) {
-        headRef.current.speakText(
-          "No sufficiently close conversation found for transcript"
-        );
-      }
+      // Default message when no match is found
+      const defaultMessage = "मुझे आपकी बात समझ में नहीं आई। कृपया फिर से कहें।";
+      setResponseText(defaultMessage);
 
-      // Clear any existing response text or image content
-      setResponseText("");
-    //   setImageContent("");
+      // Try to speak the default message
+      if (headRef.current) {
+        try {
+          await headRef.current.speakText(defaultMessage);
+        } catch (error) {
+          console.error("Error speaking default message:", error);
+          await ttsFetchWrapper(defaultMessage, "hi-IN", "hi-IN-Standard-A");
+        }
+      } else {
+        await ttsFetchWrapper(defaultMessage, "hi-IN", "hi-IN-Standard-A");
+      }
     }
   };
 
   useEffect(() => {
+    // Check if TalkingHead library is available
+    console.log("TalkingHead library available?", typeof TalkingHead !== "undefined");
+
     const initTalkingHead = async () => {
+      if (typeof TalkingHead === "undefined") {
+        console.error("TalkingHead library not available!");
+        if (loadingRef.current) {
+          loadingRef.current.textContent = "TalkingHead library not loaded correctly";
+        }
+        return;
+      }
+      
       const nodeAvatar = avatarRef.current;
+      if (!nodeAvatar) {
+        console.error("Avatar reference not available!");
+        return;
+      }
+
+      console.log("Creating Talking Head instance");
+      
       try {
-        console.log("Creating Talking Head instance");
+        // Custom TTS fetch wrapper
+        const ttsProxyEndpoint = "http://localhost:8000/tts/generate";
+
+        // Patch TalkingHead instance
         headRef.current = new TalkingHead(nodeAvatar, {
           cameraView: "upper",
-          ttsEndpoint:
-            "https://api.elevenlabs.io/v1/text-to-speech/wBtZtyqh23tPxOzF1pK4/with-timestamps",
-          ttsApikey: "98d2b4bd1d379ce21ad568fb86183396",
-          modelId: "eleven_multilingual_V2",
-          voice_settings: {
-            stability: 0.4,
-            similarity_boost: 0.8,
-            use_speaker_boost: true,
+          ttsEndpoint: ttsProxyEndpoint,
+          ttsRequestBody: (text, lang, voice) => {
+            return {
+              text: text,
+              language_code: lang || "hi-IN",
+              voice_name: voice || "hi-IN-Standard-A",
+              speaking_rate: 1,
+              pitch: 0,
+            };
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+          fetch: async (url, options, text, lang, voice) => {
+            // Intercept fetch with wrapper
+            const response = await ttsFetchWrapper(text, lang, voice);
+            console.log("Returning processed TTS response:", response);
+            return response;
           },
         });
 
-        // Wait for avatar initialization and loading
         const nodeLoading = loadingRef.current;
-        nodeLoading.textContent = "Loading...";
+        if (nodeLoading) {
+          nodeLoading.textContent = "लोड हो रहा है...";
+        }
+
         await headRef.current.showAvatar(
           {
-            url: "https://storage.googleapis.com/glb_buckets/6610f997ec100b8c02c763b8%20(2).glb",
+            url: "/assets/model.glb",
             body: "M",
             avatarMood: "neutral",
-            ttsLang: "en-GB",
-            ttsVoice: "en-GB-Standard-A",
-            lipsyncLang: "en"
+            ttsLang: "en-GB", // Set to Hindi
+            ttsVoice: "en-GB-Standard-A", // Hindi voice
+            lipsyncLang: "en", // Hindi lip sync
           },
           (ev) => {
-            if (ev.lengthComputable) {
+            if (ev.lengthComputable && nodeLoading) {
               let val = Math.min(100, Math.round((ev.loaded / ev.total) * 100));
-              nodeLoading.textContent = "Loading " + val + "%";
+              nodeLoading.textContent = `लोड हो रहा है ${val}%`;
             }
           }
         );
 
-        // Hide loading indicator after initialization
-        nodeLoading.style.display = "none";
+        if (nodeLoading) {
+          nodeLoading.style.display = "none";
+        }
+
+        // Test speech after initialization
+        console.log("Testing talking head with simple message...");
+        setTimeout(() => {
+          if (headRef.current) {
+            headRef.current.speakText("नमस्ते, मैं स्वास्थ्य बीर हूँ।")
+              .then(() => console.log("Test speech completed"))
+              .catch(err => {
+                console.error("Test speech failed:", err);
+                // Fallback to direct TTS
+                return ttsFetchWrapper("नमस्ते, मैं स्वास्थ्य बीर हूँ।", "hi-IN", "hi-IN-Standard-A");
+              });
+          } else {
+            console.error("headRef.current is not available for test speak");
+          }
+        }, 3000); // Wait 3 seconds to ensure initialization is complete
       } catch (error) {
         console.error("Failed to initialize Talking Head:", error);
-        // Display error message or handle initialization failure
-        loadingRef.current.textContent =
-          "Failed to initialize Talking Head: " + error.toString();
+        if (loadingRef.current) {
+          loadingRef.current.textContent = "अवतार लोड करने में समस्या आई: " + error.toString();
+        }
       }
     };
 
@@ -211,18 +343,20 @@ const App = () => {
         position: "relative",
       }}
     >
-      {/* Background video */}
-      <video
+      {/* Background image */}
+      <img
         src={bg}
-        muted
-        loop
+        alt="Background"
         style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
           width: "100%",
           height: "100vh",
           objectFit: "cover",
           zIndex: "-10",
         }}
-      ></video>
+      />
 
       {/* Avatar container */}
       <div
@@ -387,15 +521,22 @@ const App = () => {
         </span>
       )}
 
-      {/* Video player
-          {
-              responseText && videoClose &&
-              <span style={{ width: "600px", height: "fit-content", zIndex: "2500", display: "flex", flexDirection: "column", alignItems: "center", position: "absolute", bottom: "15rem", right: "10rem", borderRadius: "20px", overflow: "hidden" }}>
-                  <video src={responseText} style={{ width: "600px", height: "fit-content", zIndex: "2000", right: "10rem", borderRadius: "20px 20px 0 0", border: "1px solid black" }} autoPlay controls>
-                  </video>
-                  <button onClick={() => setVideoClose(true)} style={{ background: "black", color: "white", padding: "1rem 2rem", width: "100%", borderRadius: "0 0 500px 500px", border: "none", cursor: "pointer" }}>Close Video</button>
-              </span>
-          } */}
+      {/* Direct audio player as fallback */}
+      {/* {audioSrc && (
+        <audio 
+          autoPlay 
+          src={audioSrc} 
+          controls
+          style={{ 
+            position: "fixed", 
+            bottom: "10px", 
+            right: "10px", 
+            zIndex: 9999,
+            maxWidth: "300px" 
+          }} 
+          onError={(e) => console.error("Audio error:", e)}
+        />
+      )} */}
     </div>
   );
 };
